@@ -41,7 +41,7 @@ class Carga(models.Model):
     peso_kg = models.DecimalField(max_digits=10, decimal_places=2)
     origem = models.CharField(max_length=255)
     destino = models.CharField(max_length=255)
-    preco_frete = models.DecimalField(max_length=255)
+    preco_frete = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
 
     # Relacionamentos
