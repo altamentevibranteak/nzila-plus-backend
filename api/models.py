@@ -29,7 +29,7 @@ class Motorista(models.Model):
 class Cliente(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     telefone = models.CharField(max_length=20)
-    endereço = models.TextField()
+    endereço = models.CharField(max_length=255, blank=True)
     
 
     def __str__(self):

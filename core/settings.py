@@ -40,7 +40,9 @@ INSTALLED_APPS = [
 
     # Apps de terceiros
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
+    'drf_spectacular',
 
     # Nossa App
     'api',
@@ -127,3 +129,12 @@ STATIC_URL = "static/"
 
 CORS_ALLOW_ALL_ORIGINS = True  # Permite que o frontend se ligue
 ALLOWED_HOSTS = ['*']          # Permite que o Codespaces rode o servidor abertamente
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHNTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+CORS_ALLOW_ALL_ORIGINS = True
