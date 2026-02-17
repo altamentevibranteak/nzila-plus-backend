@@ -28,7 +28,9 @@ class CargaViewSet(viewsets.ModelViewSet):
         """
         Filtra as cargas com base no tipo de utilizador:
         - Cliente: vê apenas suas próprias cargas
-        - Motorista: vê cargas atribuídas a ele, excluindo as PENDENTES
+        - Motorista: 
+          - Para aceitar/disponiveis: vê cargas PENDENTE sem motorista atribuído
+          - Caso contrário: vê cargas atribuídas a ele, excluindo as PENDENTES
         - Admin: vê todas as cargas
         
         Ordena sempre pelas mais recentes.
@@ -42,9 +44,14 @@ class CargaViewSet(viewsets.ModelViewSet):
         
         # Se for um Motorista
         elif hasattr(user, 'motorista'):
-            queryset = queryset.filter(
-                motorista=user.motorista
-            ).exclude(status='PENDENTE')
+            # Actions para aceitar cargas: mostrar PENDENTE sem motorista
+            if self.action in ['aceitar', 'disponiveis']:
+                queryset = queryset.filter(status='PENDENTE', motorista__isnull=True)
+            else:
+                # Cargas atribuídas ao motorista (excetuando PENDENTE)
+                queryset = queryset.filter(
+                    motorista=user.motorista
+                ).exclude(status='PENDENTE')
         
         # Se for Admin, vê tudo (já está filtrado por all())
         
@@ -64,27 +71,48 @@ class CargaViewSet(viewsets.ModelViewSet):
     def disponiveis(self, request):
         """
         Retorna todas as cargas com status 'PENDENTE' (disponíveis para aceitação).
+        Motoristas veem apenas cargas que ainda não foram atribuídas (motorista__isnull=True).
         Endpoint: GET /api/cargas/disponiveis/
         """
-        cargas_disponiveis = Carga.objects.filter(status='PENDENTE').order_by('-data_criacao')
+        cargas_disponiveis = Carga.objects.filter(
+            status='PENDENTE', 
+            motorista__isnull=True
+        ).order_by('-data_criacao')
         serializer = self.get_serializer(cargas_disponiveis, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'], url_path='aceitar', url_name='aceitar')
+    @action(detail=True, methods=['post'], url_path='aceitar', url_name='aceitar', serializer_class=None)
     def aceitar(self, request, pk=None):
         """
         Motorista aceita uma carga disponível (PENDENTE).
         Altera o status para 'EM_ANDAMENTO' e associa o motorista.
         Endpoint: POST /api/cargas/{id}/aceitar/
+        
+        Requer: URL com o ID da carga
+        Sem campos adicionais no corpo da requisição.
         """
-        # Verificar se o usuário é um Motorista
-        if not hasattr(request.user, 'motorista'):
+        try:
+            # Verificar se o usuário logado tem um perfil de motorista
+            if not hasattr(request.user, 'motorista'):
+                return Response(
+                    {"erro": "Apenas motoristas podem aceitar cargas."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            motorista = request.user.motorista
+        except Exception as e:
             return Response(
-                {"erro": "Apenas motoristas podem aceitar cargas."},
-                status=status.HTTP_403_FORBIDDEN
+                {"erro": f"Erro ao verificar perfil de motorista: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
             )
         
-        carga = self.get_object()
+        try:
+            carga = self.get_object()
+        except Carga.DoesNotExist:
+            return Response(
+                {"erro": "Carga não encontrada."},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # Verificar se a carga está com status PENDENTE
         if carga.status != 'PENDENTE':
@@ -96,36 +124,66 @@ class CargaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Alterar status e associar motorista
-        carga.status = 'EM_ANDAMENTO'
-        carga.motorista = request.user.motorista
-        carga.save()
+        # Verificar se a carga já foi atribuída a outro motorista
+        if carga.motorista is not None:
+            return Response(
+                {
+                    "erro": "Esta carga já foi aceita por outro motorista.",
+                    "motorista": str(carga.motorista)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        serializer = self.get_serializer(carga)
-        return Response(
-            {
-                "mensagem": "Carga aceita com sucesso!",
-                "carga": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
+        try:
+            # Alterar status e associar motorista
+            carga.status = 'EM_ANDAMENTO'
+            carga.motorista = motorista
+            carga.save()
+            
+            serializer = self.get_serializer(carga)
+            return Response(
+                {
+                    "mensagem": "Carga aceita com sucesso!",
+                    "carga": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"erro": f"Erro ao aceitar carga: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-    @action(detail=True, methods=['post'], url_path='recusar', url_name='recusar')
+    @action(detail=True, methods=['post'], url_path='recusar', url_name='recusar', serializer_class=None)
     def recusar(self, request, pk=None):
         """
         Motorista recusa uma carga disponível.
         Por enquanto, apenas retorna mensagem de sucesso.
         TODO: Adicionar lógica de ignorar/marcar como rejeitado pelo motorista.
         Endpoint: POST /api/cargas/{id}/recusar/
-        """
-        # Verificar se o usuário é um Motorista
-        if not hasattr(request.user, 'motorista'):
-            return Response(
-                {"erro": "Apenas motoristas podem recusar cargas."},
-                status=status.HTTP_403_FORBIDDEN
-            )
         
-        carga = self.get_object()
+        Requer: URL com o ID da carga
+        Sem campos adicionais no corpo da requisição.
+        """
+        try:
+            # Verificar se o usuário é um Motorista
+            if not hasattr(request.user, 'motorista'):
+                return Response(
+                    {"erro": "Apenas motoristas podem recusar cargas."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            carga = self.get_object()
+        except Carga.DoesNotExist:
+            return Response(
+                {"erro": "Carga não encontrada."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"erro": f"Erro ao recusar carga: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Verificar se a carga está com status PENDENTE
         if carga.status != 'PENDENTE':
