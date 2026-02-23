@@ -80,6 +80,7 @@ class Carga(models.Model):
     motorista = models.ForeignKey(Motorista, on_delete=models.SET_NULL, null=True, blank=True, related_name='entregas')
 
     data_criacao = models.DateTimeField(auto_now_add=True)
+    data_entrega = models.DateTimeField(null=True, blank=True, verbose_name="Data de Entrega")
 
     def calcular_preco_estimado(self):
         """
