@@ -10,12 +10,13 @@ class CargaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Carga
         fields = [
-            'id', 'titulo', 'descricao', 'peso_kg', 'foto_carga', 
+            'id', 'titulo', 'descricao', 'peso_kg', 'foto_carga',
             'origem', 'destino', 'origem_coords', 'destino_coords',
-            'preco_frete', 'status', 'tipo_servico', 'data_agendamento',
-            'acompanhada', 'categoria', 'cliente', 'motorista',
-            'data_criacao'
+            'distancia_km', 'preco_frete', 'status', 'tipo_servico',
+            'data_agendamento', 'acompanhada', 'categoria', 'cliente',
+            'motorista', 'data_criacao', 'avaliacao'
         ]
+        read_only_fields = ['cliente', 'status', 'data_criacao', 'avaliacao']
         read_only_fields = ['cliente', 'status', 'data_criacao']
 
 class MotoristaSerializer(serializers.ModelSerializer):
@@ -63,4 +64,4 @@ class RegisterSerializer(serializers.Serializer):
                 telefone=validated_data['telefone']
             )
         
-        return user   
+        return user
